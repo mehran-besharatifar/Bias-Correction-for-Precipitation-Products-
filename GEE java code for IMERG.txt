@@ -1,0 +1,62 @@
+// Load NASA GPM IMERG Monthly precipitation dataset
+var dataset = ee.ImageCollection('NASA/GPM_L3/IMERG_MONTHLY_V06');
+
+// Define your customRegion correctly
+var customRegion = ee.Geometry.Polygon(
+  [[[46.104615635176394, 35.07184941455777],  // Upper-left corner
+    [46.104615635176394, 30.920485090809773], // Lower-left corner
+    [49.1682827875905, 30.920485090809773],   // Lower-right corner
+    [49.1682827875905, 35.07184941455777]]]   // Upper-right corner
+);
+
+// Function to pad the month with a leading zero if it's a single digit
+var padMonth = function(month) {
+  return month < 10 ? '0' + month : '' + month;
+};
+
+// Function to export the 'precipitation' band from the first image in the filtered dataset as a GeoTIFF
+var exportImageToTiff = function(image, year, month) {
+  // Get the image date as a string for naming the export
+  var dateString = year + '_' + padMonth(month);
+  
+  // Select the 'precipitation' band
+  var precipitation = image.select('precipitation');
+
+  // Define the export parameters
+  var exportParams = {
+    image: precipitation,
+    description: 'IMERG_MonthlyPrecipitation_' + dateString,
+    region: customRegion, // Export for the custom region
+    crs: 'EPSG:4326', // Set the coordinate system to WGS84
+    scale: 0.01 * 11132, // 0.01 degrees in meters (~1.1132 km)
+    maxPixels: 1e13 // High maxPixels to avoid export errors
+  };
+  
+  // Export the band to Google Drive
+  Export.image.toDrive(exportParams);
+};
+
+// Loop over the years and months
+for (var year = 2002; year <= 2002; year++) {
+  for (var month = 1; month <= 12; month++) {
+    // Define the start date for filtering the dataset
+    var startDate = year + '-' + padMonth(month) + '-01';
+    var startDateObj = ee.Date(startDate);
+
+    // Use ee.Date.advance() to get the end date (just for better readability)
+    var endDateObj = startDateObj.advance(1, 'month').advance(-1, 'day');
+
+    // Filter the dataset for the given month and year
+    var filteredDataset = dataset.filterDate(startDateObj, endDateObj);
+
+    // Check if there is data for the month
+    var image = filteredDataset.first();
+    if (image) {
+      // Export the 'precipitation' band from the first image in the filtered dataset
+      exportImageToTiff(image, year, month);
+    }
+  }
+}
+
+// Print a message indicating the export process
+print('Export process started. Check the "Tasks" tab for progress.');
